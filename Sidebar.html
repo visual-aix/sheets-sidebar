@@ -346,6 +346,11 @@
               }}
             >
               <Box sx={{ position: "absolute", right: 4, top: 4 }}>
+                <Tooltip title="Relaunch latest panel">
+                  <IconButton color="inherit" onClick={() => scripts.open()}>
+                    <Icon>refresh</Icon>
+                  </IconButton>
+                </Tooltip>
                 <DownloadCSVButton />
               </Box>
             </Box>
@@ -570,14 +575,6 @@
                 }
               />
             </FormGroup>
-            <Tooltip title="Relaunch latest panel">
-              <IconButton
-                style={{ position: "absolute", top: "0", right: "0" }}
-                onClick={() => scripts.open()}
-              >
-                <Icon>refresh</Icon>
-              </IconButton>
-            </Tooltip>
           </div>
         );
 
