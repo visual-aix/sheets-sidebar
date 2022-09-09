@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top" />
+    <script
+      src="https://code.jquery.com/jquery-3.6.1.min.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react@18/umd/react.production.min.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+      crossorigin
+    ></script>
+    <script src="https://unpkg.com/@mui/material@latest/umd/material-ui.production.min.js"></script>
+
+    <!-- Fonts to support Material Design -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap"
+    />
+    <!-- Icons to support Material Design -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/filepond@4.30.4/dist/filepond.min.js"></script>
+    <script>
+      const { create, supported, registerPlugin, FileStatus } = FilePond;
+
+      // Do this once
+      const isSupported = supported();
+
+      // filtered methods
+      const filteredMethods = [
+        "setOptions",
+        "on",
+        "off",
+        "onOnce",
+        "appendTo",
+        "insertAfter",
+        "insertBefore",
+        "isAttachedTo",
+        "replaceElement",
+        "restoreElement",
+        "destroy",
+      ];
+
+      // The React <FilePond/> wrapper
+      class ReactFilePond extends React.Component {
+        constructor(props) {
+          super(props);
+          this.allowFilesSync = true;
+        }
+
+        // Will setup FilePond instance when mounted
+        componentDidMount() {
+          // clone the input so we can restore it in unmount
+          this._input = this._element.querySelector('input[type="file"]');
+          this._inputClone = this._input.cloneNode();
+
+          // exit here if not supported
+          if (!isSupported) return;
+
+          const options = Object.assign({}, this.props);
+
+          // if onupdate files is defined, make sure setFiles does not cause race condition
+          if (options.onupdatefiles) {
+            const cb = options.onupdatefiles;
+            options.onupdatefiles = (items) => {
+              this.allowFilesSync = false;
+              cb(items);
+            };
+          }
+
+          // Create our pond
+          this._pond = create(this._input, options);
+
+          // Reference pond methods to FilePond component instance
+          Object.keys(this._pond)
+            .filter((key) => !filteredMethods.includes(key))
+            .forEach((key) => {
+              this[key] = this._pond[key];
+            });
+        }
+
+        // Will clean up FilePond instance when unmounted
+        componentWillUnmount() {
+          // exit when no pond defined
+          if (!this._pond) return;
+
+          // This fixed <Strict> errors
+
+          // FilePond destroy is async so we have to move FilePond to a bin element so it can no longer affect current element tree as React unmount / mount is sync
+          const bin = document.createElement("div");
+          bin.append(this._pond.element);
+          bin.id = "foo";
+
+          // now we call destroy so FilePond can start it's destroy logic
+          this._pond.destroy();
+          this._pond = undefined;
+
+          // we re-add the original file input element so everything is as it was before
+          this._element.append(this._inputClone);
+        }
+
+        shouldComponentUpdate() {
+          if (!this.allowFilesSync) {
+            this.allowFilesSync = true;
+            return false;
+          }
+          return true;
+        }
+
+        // Something changed
+        componentDidUpdate() {
+          // exit when no pond defined
+          if (!this._pond) return;
+
+          const options = Object.assign({}, this.props);
+
+          // this is only set onces, on didmount
+          delete options.onupdatefiles;
+
+          // update pond options based on new props
+          this._pond.setOptions(options);
+        }
+
+        // Renders basic element hook for FilePond to attach to
+        render() {
+          const {
+            id,
+            name,
+            className,
+            allowMultiple,
+            required,
+            captureMethod,
+            acceptedFileTypes,
+          } = this.props;
+          return createElement(
+            "div",
+            {
+              className: "filepond--wrapper",
+              ref: (element) => (this._element = element),
+            },
+            createElement("input", {
+              type: "file",
+              name,
+              id,
+              accept: acceptedFileTypes,
+              multiple: allowMultiple,
+              required: required,
+              className: className,
+              capture: captureMethod,
+            })
+          );
+        }
+      }
+    </script>
+    <link
+      href="https://cdn.jsdelivr.net/npm/filepond@4.27.1/dist/filepond.min.css"
+      rel="stylesheet"
+    />
+
+    <style>
+      body {
+        max-width: 100%;
+        font-family: "Roboto", sans-serif;
+      }
+      img {
+        max-width: 100%;
+      }
+      .filepond--credits {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script id="services">
+      const scripts = {
+        close: () => google.script.host.close(),
+        open: () => google.script.run.showVisualAISidebar(),
+        sync: (cb) => google.script.run.withSuccessHandler(cb).getState(),
+        getSettings: (cb) =>
+          google.script.run.withSuccessHandler(cb).getSettings(),
+        getPhotoshop: (cb) =>
+          google.script.run.withSuccessHandler(cb).getPhotoshop(),
+      };
+
+      const fetchFolder = (path, cb) => {
+        $.get(path, function (data) {
+          data = $.parseHTML(data);
+          let files = [];
+          $(data)
+            .find("a")
+            .each(function () {
+              var file = $(this).attr("href");
+              console.log(file);
+              if (
+                file.endsWith(".png") ||
+                file.endsWith(".jpg") ||
+                file.endsWith(".jpeg")
+              )
+                files.push(file);
+            });
+          cb(files);
+        }).fail(() => cb([]));
+      };
+
+      const fs = {
+        server: "http://localhost:8088/",
+        uploadServer: "http://localhost:8088/upload",
+        localFolder: "V:\\",
+        getFolder: (folder, cb) => {
+          const result = { input: [], output: [] };
+          if (!folder) return cb(result);
+
+          const inPath = fs.server + folder + "/";
+          const outPath = fs.server + folder + "/images";
+
+          let inFiles, outFiles;
+          fetchFolder(inPath, (files) => {
+            result.input = files.map((f) => fs.server + f.replace("/", ""));
+            if (result.output) cb(result);
+          });
+          fetchFolder(outPath, (files) => {
+            result.output = files.map((f) => fs.server + f.replace("/", ""));
+            if (result.input) cb(result);
+          });
+        },
+        downloadCSV: (cb) => {
+          scripts.getPhotoshop((csv) => {
+            console.log(csv);
+            $.ajax(fs.server + "sync-csv", {
+              method: "POST",
+              dataType: "text",
+              data: csv,
+            }).done(() => cb());
+          });
+        },
+      };
+
+      function arrayFrom(text) {
+        return (text || "").split(" ").filter((t) => !!t);
+      }
+    </script>
+    <script id="imports">
+      const { useState, useEffect, useRef, useCallback, createElement } = React;
+
+      const {
+        Button,
+        IconButton,
+        Icon,
+        SvgIcon,
+        Tooltip,
+        Grid,
+        FormGroup,
+        FormControlLabel,
+        Checkbox,
+        Typography,
+        Box,
+        Link,
+        CircularProgress,
+      } = MaterialUI;
+    </script>
+    <script id="app" type="text/babel">
+      function App({ settings }) {
+        const { autoSync, toggleAutoSync, stateLoading, state } =
+          useAutoSync(2000);
+
+        const COL = {
+          name: settings.header.indexOf("name"),
+          date: settings.header.indexOf("date"),
+          folder: settings.header.indexOf("folder"),
+          prompt: settings.header.indexOf("prompt"),
+          actualprompt: settings.header.indexOf("actual prompt"),
+          keywords: settings.header.indexOf("keywords"),
+          igtags: settings.header.indexOf("ig tags"),
+          igpost: settings.header.indexOf("ig post"),
+        };
+
+        const igpost = state.row_values[COL.igpost] || "";
+        const folder = state.row_values[COL.folder];
+        const name = state.row_values[COL.name];
+        const keywords = arrayFrom(state.row_values[COL.keywords]);
+        const igtags = arrayFrom(state.row_values[COL.igtags]);
+        const { folders, filesLoading, loadFiles } = useFileSystem();
+        useEffect(() => {
+          loadFiles(folder);
+        }, [folder]);
+        const folderFiles = folders[folder];
+
+        const hasFilesInput = folderFiles && folderFiles.input;
+        const hasFilesOutput = folderFiles && folderFiles.output.length > 0;
+        const carouselFiles = hasFilesOutput
+          ? folderFiles.output.filter((f) => f.indexOf("carousel_") > -1)
+          : [];
+        const storiesFiles = hasFilesOutput
+          ? folderFiles.output.filter((f) => f.indexOf("story_") > -1)
+          : [];
+        const hasCarousel = carouselFiles.length > 0;
+        const hasStories = storiesFiles.length > 0;
+
+        const instagramReady = hasCarousel && igtags.length > 0;
+        const { copy } = useCopy();
+        const copyLocalImagePaths = (filesc) => {
+          var cmd = filesc
+            .map(
+              (f) =>
+                '"' +
+                f
+                  .replace(fs.server, fs.localFolder)
+                  .replaceAll("/", "\\")
+                  .replaceAll("%20", " ") +
+                '"'
+            )
+            .join(" ");
+
+          if (cmd.length > 255) cmd = fs.localFolder + folder + "\\images";
+
+          copy(cmd);
+        };
+
+        const row_render = (
+          <Box>
+            <Box
+              sx={{
+                position: "absolute",
+                backgroundColor: "#616161",
+                color: "#FFF",
+                height: 48,
+                left: 0,
+                right: 0,
+                top: 0,
+              }}
+            >
+              <Box sx={{ position: "absolute", right: 4, top: 4 }}>
+                <DownloadCSVButton />
+              </Box>
+            </Box>
+            <Box sx={{ mt: "60px", overflowY: "auto" }}>
+              <Grid container direction="column">
+                <Grid item>
+                  <Typography variant="caption" sx={{ mr: 1, opacity: 0.3 }}>
+                    {state.row_index}
+                  </Typography>
+                  {name || (
+                    <i style={{ opacity: 0.4 }}>Start a new instagram post</i>
+                  )}
+                </Grid>
+
+                {folder && (
+                  <Grid item>
+                    <Button
+                      onClick={() => loadFiles(folder)}
+                      variant="text"
+                      startIcon={
+                        filesLoading ? (
+                          <CircularProgress
+                            size=".8rem"
+                            sx={{ mr: "5px" }}
+                            color="inherit"
+                          />
+                        ) : (
+                          <Icon>folder</Icon>
+                        )
+                      }
+                      sx={{
+                        textTransform: "none",
+                        color:
+                          filesLoading || !folderFiles
+                            ? "gray"
+                            : folderFiles.input.length > 0
+                            ? "green"
+                            : "red",
+                      }}
+                    >
+                      <Typography variant="caption" sx={{ mr: 1 }}>
+                        {folder}
+                      </Typography>
+                    </Button>
+                  </Grid>
+                )}
+              </Grid>
+              <div>
+                <Grid container direction="row" spacing={1} sx={{ my: 1 }}>
+                  {folderFiles &&
+                    folderFiles.input.map((i) => (
+                      <Grid item xs key={i}>
+                        <img
+                          style={{ height: 65 }}
+                          title={i.replace(fs.server + folder, "")}
+                          src={i}
+                        />
+                      </Grid>
+                    ))}
+                </Grid>
+                {!!folder && (
+                  <ImagesUploader
+                    folder={folder}
+                    onUpload={() => loadFiles(folder)}
+                  />
+                )}
+
+                {!hasFilesInput && (
+                  <Button
+                    variant="text"
+                    startIcon={<Icon>brush</Icon>}
+                    sx={{
+                      textTransform: "none",
+                      color: "red",
+                    }}
+                  >
+                    Drop some AI images
+                  </Button>
+                )}
+                {hasFilesInput && !hasFilesOutput && (
+                  <Button
+                    variant="text"
+                    startIcon={<Icon>auto_awesome</Icon>}
+                    sx={{
+                      textTransform: "none",
+                      color: "red",
+                    }}
+                  >
+                    Use photoshop to generate output
+                  </Button>
+                )}
+              </div>
+
+              {igtags.length === 0 && (
+                <Button
+                  variant="text"
+                  startIcon={<Icon>tag</Icon>}
+                  sx={{
+                    textTransform: "none",
+                    color: "red",
+                  }}
+                >
+                  {keywords.length > 0
+                    ? "Generate some unique hashtags"
+                    : "Add actual prompt"}
+                </Button>
+              )}
+              {igtags.length === 0 && keywords.length > 0 && (
+                <Box sx={{ ml: 3 }}>
+                  <Tooltip title="Copy keywords">
+                    <IconButton onClick={() => copy(keywords.join(" "))}>
+                      <Icon>text_snippet</Icon>
+                    </IconButton>
+                  </Tooltip>
+                  <Typography variant="caption">
+                    {keywords.join(" ")}
+                  </Typography>
+                </Box>
+              )}
+
+              <Box sx={{ mt: 2, mb: 1 }}>
+                <Grid container direction="row">
+                  <Grid item xs>
+                    <Button
+                      variant="text"
+                      startIcon={<InstagramIcon />}
+                      sx={{
+                        color: instagramReady ? "green" : "gray",
+                        textTransform: "none",
+                        mr: 0.5,
+                      }}
+                    >
+                      {instagramReady ? "Ready" : "In progress"}
+                    </Button>
+                  </Grid>
+                  <Grid item>
+                    {igpost && (
+                      <Tooltip title="Copy text">
+                        <IconButton onClick={() => copy(igpost)}>
+                          <Icon>wysiwyg</Icon>
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {hasCarousel && (
+                      <Tooltip title="Copy carousel image paths">
+                        <IconButton
+                          onClick={() => copyLocalImagePaths(carouselFiles)}
+                        >
+                          <Icon>view_carousel</Icon>
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {hasStories && (
+                      <Tooltip title="Copy stories image paths">
+                        <IconButton
+                          onClick={() => copyLocalImagePaths(storiesFiles)}
+                        >
+                          <Icon>auto_stories</Icon>
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Grid>
+                </Grid>
+              </Box>
+
+              <Grid container direction="row" spacing={1} sx={{ my: 1 }}>
+                {hasFilesOutput &&
+                  folderFiles.output.map((i) => (
+                    <Grid item xs key={i}>
+                      <img title={i.replace(fs.server + folder, "")} src={i} />
+                    </Grid>
+                  ))}
+              </Grid>
+              {igpost && (
+                <div>
+                  <Box
+                    sx={{
+                      backgroundColor: "#EEE",
+                      p: [1, 0.5],
+                      mt: 1,
+                      maxHeight: 180,
+                      overflowY: "auto",
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        width: "100%",
+                        whiteSpace: "pre-wrap",
+                        fontSize: ".55rem",
+                      }}
+                    >
+                      {igpost.replaceAll("\r", "\n")}
+                    </Typography>
+                  </Box>
+                </div>
+              )}
+            </Box>
+          </Box>
+        );
+
+        const settingsbar = (
+          <div
+            style={{
+              position: "absolute",
+              bottom: "0",
+              left: 16,
+              right: 0,
+              backgroundColor: "white",
+            }}
+          >
+            <FormGroup>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={autoSync}
+                    onChange={(e) => toggleAutoSync(e.target.checked)}
+                  />
+                }
+                label={
+                  <div>Sync panel with sheet {stateLoading ? "..." : null}</div>
+                }
+              />
+            </FormGroup>
+            <Tooltip title="Relaunch latest panel">
+              <IconButton
+                style={{ position: "absolute", top: "0", right: "0" }}
+                onClick={() => scripts.open()}
+              >
+                <Icon>refresh</Icon>
+              </IconButton>
+            </Tooltip>
+          </div>
+        );
+
+        return (
+          <div>
+            {state.row_index > 1 && row_render}
+            {settingsbar}
+          </div>
+        );
+      }
+
+      function DownloadCSVButton() {
+        const [loading, setLoading] = React.useState(false);
+
+        const onClick = () => {
+          setLoading(true);
+          fs.downloadCSV(() => {
+            setLoading(false);
+          });
+        };
+
+        return (
+          <Tooltip title="Sync sheet to local machine CSV. Local file is used by Photoshop variables.">
+            <IconButton disabled={loading} color="inherit" onClick={onClick}>
+              {loading ? (
+                <CircularProgress size="1rem" color="inherit" />
+              ) : (
+                <Icon>download</Icon>
+              )}
+            </IconButton>
+          </Tooltip>
+        );
+      }
+
+      function ImagesUploader({ folder, onUpload }) {
+        const pond = useRef(null);
+        const [files, setFiles] = useState([]);
+
+        useEffect(() => {
+          if (pond.current) {
+            const p = pond.current._pond;
+            p.on("processfile", (e, file) => {
+              onUpload();
+              setFiles((ff) => ff.filter((f) => f.filename !== file.filename));
+            });
+          }
+        }, [pond.current]);
+
+        return (
+          <ReactFilePond
+            ref={pond}
+            files={files}
+            onupdatefiles={setFiles}
+            allowMultiple={true}
+            allowReorder={true}
+            maxFiles={10}
+            server={fs.uploadServer + "?folder=" + folder}
+            name="file"
+            labelIdle="Drop AI images here"
+          />
+        );
+      }
+
+      function useCopy() {
+        const copy = (text) => {
+          navigator.clipboard.writeText(text).then(() => {});
+        };
+
+        return {
+          copy,
+        };
+      }
+
+      function useFileSystem() {
+        const [folders, setFolders] = React.useState({});
+        const [filesLoading, setFilesLoading] = useState(true);
+
+        const loadFiles = useCallback(
+          (folder) => {
+            if (!folder) return;
+
+            setFilesLoading(true);
+            fs.getFolder(folder, (folderFiles) => {
+              setFilesLoading(false);
+              setFolders((folders) => ({
+                ...folders,
+                [folder]: folderFiles,
+              }));
+            });
+          },
+          [setFolders, setFilesLoading]
+        );
+
+        return {
+          folders,
+          filesLoading,
+          loadFiles,
+        };
+      }
+
+      function useAutoSync(interval = 1000) {
+        const [autoSync, toggleAutoSync] = useState(true);
+        const [stateLoading, setStateLoading] = useState(true);
+        const [state, setState] = useState({
+          selection: "A1",
+          row_index: 1,
+          row_values: [],
+        });
+        useEffect(() => {
+          let timer = null;
+          const syncData = () => {
+            setStateLoading(true);
+            scripts.sync((results) => {
+              if (results) setState(results);
+              setStateLoading(false);
+
+              if (autoSync) timer = window.setTimeout(syncData, interval);
+            });
+          };
+          if (autoSync) syncData();
+
+          return () => {
+            window.clearTimeout(timer);
+          };
+        }, [autoSync]);
+
+        return {
+          autoSync,
+          toggleAutoSync,
+          stateLoading,
+          state,
+        };
+      }
+
+      const InstagramIcon = () => (
+        <SvgIcon xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512">
+          <path d="M224.1 141c-63.6 0-114.9 51.3-114.9 114.9s51.3 114.9 114.9 114.9S339 319.5 339 255.9 287.7 141 224.1 141zm0 189.6c-41.1 0-74.7-33.5-74.7-74.7s33.5-74.7 74.7-74.7 74.7 33.5 74.7 74.7-33.6 74.7-74.7 74.7zm146.4-194.3c0 14.9-12 26.8-26.8 26.8-14.9 0-26.8-12-26.8-26.8s12-26.8 26.8-26.8 26.8 12 26.8 26.8zm76.1 27.2c-1.7-35.9-9.9-67.7-36.2-93.9-26.2-26.2-58-34.4-93.9-36.2-37-2.1-147.9-2.1-184.9 0-35.8 1.7-67.6 9.9-93.9 36.1s-34.4 58-36.2 93.9c-2.1 37-2.1 147.9 0 184.9 1.7 35.9 9.9 67.7 36.2 93.9s58 34.4 93.9 36.2c37 2.1 147.9 2.1 184.9 0 35.9-1.7 67.7-9.9 93.9-36.2 26.2-26.2 34.4-58 36.2-93.9 2.1-37 2.1-147.8 0-184.8zM398.8 388c-7.8 19.6-22.9 34.7-42.6 42.6-29.5 11.7-99.5 9-132.1 9s-102.7 2.6-132.1-9c-19.6-7.8-34.7-22.9-42.6-42.6-11.7-29.5-9-99.5-9-132.1s-2.6-102.7 9-132.1c7.8-19.6 22.9-34.7 42.6-42.6 29.5-11.7 99.5-9 132.1-9s102.7-2.6 132.1 9c19.6 7.8 34.7 22.9 42.6 42.6 11.7 29.5 9 99.5 9 132.1s2.7 102.7-9 132.1z"></path>
+        </SvgIcon>
+      );
+
+      function renderApp(settings) {
+        console.log(settings);
+        const container = document.getElementById("root");
+        const root = ReactDOM.createRoot(container);
+        root.render(<App settings={settings} />);
+      }
+      scripts.getSettings(renderApp);
+    </script>
+    <script id="mocks">
+      if (!window.google) {
+        scripts.getSettings = (cb) =>
+          setTimeout(
+            () =>
+              cb({
+                header: [
+                  "name",
+                  "date",
+                  "folder",
+                  "prompt",
+                  "actual prompt",
+                  "keywords",
+                  "ig tags",
+                  "ig post",
+                ],
+                lastRow: 2,
+                lastColumn: 5,
+              }),
+            500
+          );
+        scripts.getPhotoshop = (cb) =>
+          setTimeout(() =>
+            cb(
+              `col1,col2,col3
+val1,val2,val3
+vbl1,vbl2,vbl3
+`,
+              300
+            )
+          );
+        const eg_empty = [];
+        const eg_onlyname = ["Undefined draft"];
+        const eg_onlyfolder = ["", "", "not-a-real-folder"];
+        const eg_onlyinput = ["", "", "31 moon-coffee"];
+        const eg_onlyactualprompt = [
+          "",
+          "",
+          "",
+          "",
+          "full prompt with keywords and description",
+          "keywords in here a lot of them just to see how it looks like",
+        ];
+        const eg_onlyprompt = [
+          "",
+          "",
+          "",
+          "simple prompt",
+          "",
+          "keywords in here a lot of them just to see how it looks like",
+        ];
+        const eg_snake = [
+          "test name",
+          "12 aug",
+          "08 snake",
+          "Snake full prompt",
+          "Snake in aquarium",
+          "snake aquarium",
+          "#snake #aquarium",
+          `Magicians made by smoke
+
+✨AI-generated art with a bit of human touch.
+❤️‍🔥 Originally created in the blink of an AI using text.
+⏩ Follow @visualairtist for more inspiration 🔗
+
+#ai #aiart #aiartcommunity #aiartists #aiartwork #aiartist #openai #dalle2 #midjourney #artprompt #generativeart #digitalart #nft #conceptart
+
+_____
+
+Want to bring your text to life? Let me know your idea and the AI will turn it into an amazing visual representation.`,
+        ];
+        scripts.sync = (cb) =>
+          setTimeout(
+            () =>
+              cb({
+                row_values: eg_snake,
+                selection: "A4",
+                row_index: 9,
+              }),
+            500
+          );
+      }
+    </script>
+  </body>
+</html>
