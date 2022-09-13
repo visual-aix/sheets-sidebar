@@ -40,9 +40,19 @@ function getPhotoshop() {
   var range = sheet.getRange(1, 1, lastRow, lastColumn);
 
   var csv = range.getValues();
+
+  var header = csv[0];
+  csv.shift();
+  csv = csv.reverse().filter((x) => x.join("") !== "");
+  csv = [header, ...csv];
+
+  console.log("Exporting", csv.length, "rows");
+
   const output = csv.reduce(
     (f, row) =>
-      f + row.reduce((r, cell) => r + (!!r ? "," : "") + cell, "") + "\n",
+      f +
+      row.reduce((r, cell) => r + (!!r ? "," : "") + '"' + cell + '"', "") +
+      "\n",
     ""
   );
 
