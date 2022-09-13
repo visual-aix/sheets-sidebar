@@ -368,7 +368,10 @@
                 {folder && (
                   <Grid item>
                     <Button
-                      onClick={() => loadFiles(folder)}
+                      onClick={() => {
+                        loadFiles(folder);
+                        copy(fs.localFolder + folder);
+                      }}
                       variant="text"
                       startIcon={
                         filesLoading ? (
